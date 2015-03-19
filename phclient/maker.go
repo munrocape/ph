@@ -1,4 +1,4 @@
-package client
+package phclient
 
 type Maker struct {
 	CreatedAt  string            `json:"created_at"`

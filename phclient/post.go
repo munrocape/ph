@@ -1,4 +1,4 @@
-package client
+package phclient
 
 type PostsResponse struct {
 	Posts []Post
