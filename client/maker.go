@@ -1,4 +1,4 @@
-package main
+package client
 
 type Maker struct {
 	CreatedAt  string            `json:"created_at"`

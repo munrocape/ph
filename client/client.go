@@ -1,4 +1,4 @@
-package main
+package client
 
 import (
 	"bytes"
@@ -75,7 +75,7 @@ func (c *Client) Get(url string, params url.Values) ([]byte, error) {
 		values.Add(key, val[0])
 	}
 	req.URL.RawQuery = values.Encode()
-	
+
 	// make the request
 	req.Close = true
 	resp, err := httpClient.Do(req)
@@ -181,12 +181,4 @@ func (c *Client) GetPostsOffset(n int) (PostsResponse, error) {
 	err = json.Unmarshal(rep, &posts)
 	return posts, err
 
-}
-
-func main() {
-	c := NewClient()
-	t, _ := c.GetPostsToday()
-	fmt.Printf("%+v\n\n", t)
-	tminus1, _ := c.GetPostsOffset(1)
-	fmt.Printf("%+v\n\n", tminus1)
 }
