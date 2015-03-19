@@ -16,6 +16,7 @@ type Client struct {
 	Credential           Credential
 	MarshalledCredential []byte
 	TokenSuffix          string
+	PostsSuffix          string
 }
 
 type Credential struct {
@@ -27,9 +28,9 @@ type Credential struct {
 type Token struct {
 	AccessToken string `json:"access_token"`
 	TokenType   string `json:"token_type"`
-	ExpiresIn   int    `json:"expires_in"`
+	ExpiresIn   int64  `json:"expires_in"`
 	Scope       string `json:"scope"`
-	CreatedAt   int    `json:"created_at"`
+	CreatedAt   int64  `json:"created_at"`
 }
 
 func NewClient() *Client {
@@ -37,6 +38,7 @@ func NewClient() *Client {
 	var c = Client{
 		BaseUrl:     "https://api.producthunt.com/v1/",
 		TokenSuffix: "oauth/token",
+		PostsSuffix: "posts",
 	}
 	var cred, err = c.GetCredential()
 	if err != nil {
@@ -45,7 +47,7 @@ func NewClient() *Client {
 	marshalled, _ := json.Marshal(cred)
 	c.Credential = cred
 	c.MarshalledCredential = marshalled
-	token, err := c.GetAuthToken()
+	token, err := c.GenerateToken()
 	if err != nil {
 		fmt.Printf("%s\n", err)
 		os.Exit(1)
@@ -54,25 +56,15 @@ func NewClient() *Client {
 	return &c
 }
 
-func (c *Client) GetCredential() (Credential, error) {
-	id := os.Getenv("PH_CLIENT_ID")
-	secret := os.Getenv("PH_CLIENT_SECRET")
-	var cred Credential
-	if (id == "") || (secret == "") {
-		return cred, fmt.Errorf("Missing environment key for the id or secret. Set PH_CLIENT_ID and PH_CLIENT_SECRET accordingly.")
-	}
-	cred = Credential{
-		ClientId:     id,
-		ClientSecret: secret,
-		GrantType:    "client_credentials",
-	}
-	return cred, nil
-}
-
 func (c *Client) Get(url string) ([]byte, error) {
 	httpClient := &http.Client{}
 	req, err := http.NewRequest("GET", url, bytes.NewBuffer(c.MarshalledCredential))
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
+	token := c.GetToken().AccessToken
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Host", "api.producthunt.com")
+
 	req.Close = true
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -105,7 +97,40 @@ func (c *Client) Post(url string) ([]byte, error) {
 	return response, err
 }
 
-func (c *Client) GetAuthToken() (Token, error) {
+func (c *Client) GetCredential() (Credential, error) {
+	id := os.Getenv("PH_CLIENT_ID")
+	secret := os.Getenv("PH_CLIENT_SECRET")
+	var cred Credential
+	if (id == "") || (secret == "") {
+		return cred, fmt.Errorf("Missing environment key for the id or secret. Set PH_CLIENT_ID and PH_CLIENT_SECRET accordingly.")
+	}
+	cred = Credential{
+		ClientId:     id,
+		ClientSecret: secret,
+		GrantType:    "client_credentials",
+	}
+	return cred, nil
+}
+
+// Returns a valid client authorization token.
+// Returns the current token if valid
+// If the current token is not valid, it will generate, assign, and return a new one
+func (c *Client) GetToken() Token {
+	now := time.Now().Unix()
+	currentToken := c.CurrentToken
+	var err error
+	if currentToken.CreatedAt+currentToken.ExpiresIn <= now {
+		c.CurrentToken, err = c.GenerateToken()
+		if err != nil {
+			fmt.Errorf("Could not generate a new token. Reason: %s\n", err)
+			os.Exit(1)
+		}
+	}
+	return c.CurrentToken
+}
+
+// Generate and returns a new authorization token
+func (c *Client) GenerateToken() (Token, error) {
 	url := c.BaseUrl + c.TokenSuffix
 	rep, err := c.Post(url)
 
@@ -115,11 +140,23 @@ func (c *Client) GetAuthToken() (Token, error) {
 	}
 
 	err = json.Unmarshal(rep, &token)
-	token.CreatedAt = int(time.Now().Unix())
+	token.CreatedAt = time.Now().Unix()
 	return token, err
+}
+
+func (c *Client) GetPostsToday() (PostsResponse, error) {
+	url := c.BaseUrl + c.PostsSuffix
+	rep, err := c.Get(url)
+	var posts PostsResponse
+	if err != nil {
+		return posts, err
+	}
+
+	err = json.Unmarshal(rep, &posts)
+	return posts, err
 }
 
 func main() {
 	c := NewClient()
-	c.GetAuthToken()
+	c.GetPostsToday()
 }
