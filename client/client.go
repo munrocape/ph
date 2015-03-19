@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -56,15 +58,25 @@ func NewClient() *Client {
 	return &c
 }
 
-func (c *Client) Get(url string) ([]byte, error) {
+func (c *Client) Get(url string, params url.Values) ([]byte, error) {
 	httpClient := &http.Client{}
 	req, err := http.NewRequest("GET", url, bytes.NewBuffer(c.MarshalledCredential))
+
+	// set the headers
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
 	token := c.GetToken().AccessToken
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Host", "api.producthunt.com")
 
+	// set the params
+	values := req.URL.Query()
+	for key, val := range params {
+		values.Add(key, val[0])
+	}
+	req.URL.RawQuery = values.Encode()
+	
+	// make the request
 	req.Close = true
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -146,7 +158,7 @@ func (c *Client) GenerateToken() (Token, error) {
 
 func (c *Client) GetPostsToday() (PostsResponse, error) {
 	url := c.BaseUrl + c.PostsSuffix
-	rep, err := c.Get(url)
+	rep, err := c.Get(url, nil)
 	var posts PostsResponse
 	if err != nil {
 		return posts, err
@@ -156,7 +168,25 @@ func (c *Client) GetPostsToday() (PostsResponse, error) {
 	return posts, err
 }
 
+func (c *Client) GetPostsOffset(n int) (PostsResponse, error) {
+	endpoint := c.BaseUrl + c.PostsSuffix
+	params := url.Values{}
+	params.Set("days_ago", strconv.Itoa(n))
+	rep, err := c.Get(endpoint, params)
+	var posts PostsResponse
+	if err != nil {
+		return posts, err
+	}
+
+	err = json.Unmarshal(rep, &posts)
+	return posts, err
+
+}
+
 func main() {
 	c := NewClient()
-	c.GetPostsToday()
+	t, _ := c.GetPostsToday()
+	fmt.Printf("%+v\n\n", t)
+	tminus1, _ := c.GetPostsOffset(1)
+	fmt.Printf("%+v\n\n", tminus1)
 }
