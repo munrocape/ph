@@ -115,6 +115,7 @@ func (c *Client) GetCredential() (Credential, error) {
 	var cred Credential
 	if (id == "") || (secret == "") {
 		return cred, fmt.Errorf("Missing environment key for the id or secret. Set PH_CLIENT_ID and PH_CLIENT_SECRET accordingly.")
+		os.Exit(1)
 	}
 	cred = Credential{
 		ClientId:     id,
